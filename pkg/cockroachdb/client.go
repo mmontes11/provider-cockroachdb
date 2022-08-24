@@ -1,13 +1,18 @@
 package cockroachdb
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 )
 
 const (
-	defaultURL = "https://cockroachlabs.cloud/api"
+	defaultURL    = "https://cockroachlabs.cloud/api"
+	jsonMediaType = "application/json"
 )
 
 // ClientOption provides a variadic option for configuring the client
@@ -79,6 +84,104 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	return &client, nil
 }
 
+func (c *Client) do(ctx context.Context, req *http.Request, val interface{}) error {
+	reqWithCtx := req.WithContext(ctx)
+	res, err := c.client.Do(reqWithCtx)
+	if err != nil {
+		return fmt.Errorf("error making request: %v", err)
+	}
+	defer res.Body.Close()
+
+	return c.handleResponse(ctx, res, val)
+}
+
+func (c *Client) get(ctx context.Context, path string, val interface{}) error {
+	req, err := c.newRequest(http.MethodGet, path, nil)
+	if err != nil {
+		return fmt.Errorf("error creating GET request: %v", err)
+	}
+	return c.do(ctx, req, val)
+}
+
+func (c *Client) post(ctx context.Context, path string, body, val interface{}) error {
+	req, err := c.newRequest(http.MethodPost, path, body)
+	if err != nil {
+		return fmt.Errorf("error creating POST request: %v", err)
+	}
+	return c.do(ctx, req, val)
+}
+
+func (c *Client) patch(ctx context.Context, path string, body, val interface{}) error {
+	req, err := c.newRequest(http.MethodPatch, path, body)
+	if err != nil {
+		return fmt.Errorf("error creating PATCH request: %v", err)
+	}
+	return c.do(ctx, req, val)
+}
+
+func (c *Client) delete(ctx context.Context, path string, body, val interface{}) error {
+	req, err := c.newRequest(http.MethodPatch, path, body)
+	if err != nil {
+		return fmt.Errorf("error creating DELETE request: %v", err)
+	}
+	return c.do(ctx, req, val)
+}
+
+func (c *Client) handleResponse(ctx context.Context, res *http.Response, val interface{}) error {
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response: %v", err)
+	}
+
+	if res.StatusCode >= 400 {
+		var errResponse errorResponse
+		if err := json.Unmarshal(bytes, &errResponse); err != nil {
+			return fmt.Errorf("error umarshalling response error: %v", err)
+		}
+		return &Error{
+			ErrorCode: errResponse.Code,
+			HTTPCode:  res.StatusCode,
+			Message:   errResponse.Message,
+		}
+	}
+
+	if err := json.Unmarshal(bytes, &val); err != nil {
+		return fmt.Errorf("error umarshalling response error: %v", err)
+	}
+	return nil
+}
+
+func (c *Client) newRequest(method, path string, body interface{}) (*http.Request, error) {
+	url, err := c.baseURL.Parse(path)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing URL: %v", err)
+	}
+
+	if method == http.MethodGet {
+		req, err := http.NewRequest(method, url.String(), nil)
+		if err != nil {
+			return nil, fmt.Errorf("error creating request: %v", err)
+		}
+		return req, nil
+	}
+
+	buffer := new(bytes.Buffer)
+	if body != nil {
+		if err := json.NewEncoder(buffer).Encode(body); err != nil {
+			return nil, fmt.Errorf("error encoding body: %v", err)
+		}
+	}
+
+	req, err := http.NewRequest(method, url.String(), buffer)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+	req.Header.Set("Content-Type", jsonMediaType)
+	req.Header.Set("Accept", jsonMediaType)
+
+	return req, nil
+}
+
 type accessTokenTransport struct {
 	rt          http.RoundTripper
 	accessToken string
@@ -87,4 +190,20 @@ type accessTokenTransport struct {
 func (t *accessTokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Add("Authorization", "Bearer: "+t.accessToken)
 	return t.rt.RoundTrip(req)
+}
+
+type errorResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// Error represents the common errors returned by CockroacdhDB Cloud API
+type Error struct {
+	ErrorCode int
+	HTTPCode  int
+	Message   string
+}
+
+func (e *Error) Error() string {
+	return e.Message
 }
