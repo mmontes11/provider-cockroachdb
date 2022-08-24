@@ -38,6 +38,21 @@ func WithHTTPClient(client *http.Client) ClientOption {
 	}
 }
 
+// WithAccessToken allows to override default HTTP client
+func WithAccessToken(accessToken string) ClientOption {
+	return func(c *Client) error {
+		if accessToken == "" {
+			return fmt.Errorf("access token must not be empty")
+		}
+
+		c.client.Transport = &accessTokenTransport{
+			rt:          c.client.Transport,
+			accessToken: accessToken,
+		}
+		return nil
+	}
+}
+
 // Client performs requests on the Cocokroachdb Cloud API
 type Client struct {
 	client  *http.Client
@@ -62,4 +77,14 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	}
 
 	return &client, nil
+}
+
+type accessTokenTransport struct {
+	rt          http.RoundTripper
+	accessToken string
+}
+
+func (t *accessTokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Add("Authorization", "Bearer: "+t.accessToken)
+	return t.rt.RoundTrip(req)
 }
