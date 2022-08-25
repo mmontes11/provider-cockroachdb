@@ -49,6 +49,9 @@ func WithAccessToken(accessToken string) ClientOption {
 		if accessToken == "" {
 			return fmt.Errorf("access token must not be empty")
 		}
+		if c.client.Transport == nil {
+			c.client.Transport = http.DefaultTransport
+		}
 
 		c.client.Transport = &accessTokenTransport{
 			rt:          c.client.Transport,
@@ -145,6 +148,9 @@ func (c *Client) handleResponse(ctx context.Context, res *http.Response, val int
 		}
 	}
 
+	if val == nil {
+		return nil
+	}
 	if err := json.Unmarshal(bytes, &val); err != nil {
 		return fmt.Errorf("error umarshalling response error: %v", err)
 	}

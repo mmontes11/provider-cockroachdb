@@ -51,12 +51,45 @@ func TestClient(t *testing.T) {
 			},
 			wantErr: nil,
 		},
+		{
+			name:           "contains Authorization header when providing access token",
+			clientOpts:     []ClientOption{WithAccessToken("token")},
+			reqMethod:      http.MethodGet,
+			resStatusCode:  http.StatusOK,
+			wantStatusCode: http.StatusOK,
+			wantHeaders: map[string]string{
+				"Authorization": "Bearer: token",
+			},
+			wantErr: nil,
+		},
+		{
+			name:          "returns an error for 400",
+			reqMethod:     http.MethodGet,
+			resStatusCode: http.StatusBadRequest,
+			resBody: &errorResponse{
+				Code:    1,
+				Message: "mandatory param: clientId",
+			},
+			wantStatusCode: http.StatusBadRequest,
+			actualBody:     &errorResponse{},
+			wantErr: &Error{
+				ErrorCode: 1,
+				HTTPCode:  http.StatusBadRequest,
+				Message:   "mandatory param: clientId",
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(t.Name(), func(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.resStatusCode)
+
+				if tt.wantHeaders != nil {
+					for k, v := range tt.wantHeaders {
+						assert.Equal(t, r.Header.Get(k), v)
+					}
+				}
 
 				if tt.resBody == nil {
 					return
@@ -85,12 +118,7 @@ func TestClient(t *testing.T) {
 			}
 			assert.NotNil(t, req)
 
-			for k, v := range tt.wantHeaders {
-				assert.Equal(t, req.Header.Get(k), v)
-			}
-
 			res, err := client.do(context.Background(), req, tt.actualBody)
-
 			assert.NotNil(t, res)
 			assert.Equal(t, tt.wantErr, err)
 			assert.Equal(t, res.StatusCode, tt.wantStatusCode)
