@@ -84,45 +84,45 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	return &client, nil
 }
 
-func (c *Client) do(ctx context.Context, req *http.Request, val interface{}) error {
+func (c *Client) do(ctx context.Context, req *http.Request, val interface{}) (*http.Response, error) {
 	reqWithCtx := req.WithContext(ctx)
 	res, err := c.client.Do(reqWithCtx)
 	if err != nil {
-		return fmt.Errorf("error making request: %v", err)
+		return nil, fmt.Errorf("error making request: %v", err)
 	}
 	defer res.Body.Close()
 
-	return c.handleResponse(ctx, res, val)
+	return res, c.handleResponse(ctx, res, val)
 }
 
-func (c *Client) get(ctx context.Context, path string, val interface{}) error {
+func (c *Client) get(ctx context.Context, path string, val interface{}) (*http.Response, error) {
 	req, err := c.newRequest(http.MethodGet, path, nil)
 	if err != nil {
-		return fmt.Errorf("error creating GET request: %v", err)
+		return nil, fmt.Errorf("error creating GET request: %v", err)
 	}
 	return c.do(ctx, req, val)
 }
 
-func (c *Client) post(ctx context.Context, path string, body, val interface{}) error {
+func (c *Client) post(ctx context.Context, path string, body, val interface{}) (*http.Response, error) {
 	req, err := c.newRequest(http.MethodPost, path, body)
 	if err != nil {
-		return fmt.Errorf("error creating POST request: %v", err)
+		return nil, fmt.Errorf("error creating POST request: %v", err)
 	}
 	return c.do(ctx, req, val)
 }
 
-func (c *Client) patch(ctx context.Context, path string, body, val interface{}) error {
+func (c *Client) patch(ctx context.Context, path string, body, val interface{}) (*http.Response, error) {
 	req, err := c.newRequest(http.MethodPatch, path, body)
 	if err != nil {
-		return fmt.Errorf("error creating PATCH request: %v", err)
+		return nil, fmt.Errorf("error creating PATCH request: %v", err)
 	}
 	return c.do(ctx, req, val)
 }
 
-func (c *Client) delete(ctx context.Context, path string, body, val interface{}) error {
+func (c *Client) delete(ctx context.Context, path string, body, val interface{}) (*http.Response, error) {
 	req, err := c.newRequest(http.MethodPatch, path, body)
 	if err != nil {
-		return fmt.Errorf("error creating DELETE request: %v", err)
+		return nil, fmt.Errorf("error creating DELETE request: %v", err)
 	}
 	return c.do(ctx, req, val)
 }
