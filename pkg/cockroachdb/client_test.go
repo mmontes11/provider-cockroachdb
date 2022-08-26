@@ -32,7 +32,18 @@ func TestClient(t *testing.T) {
 		wantErr        error
 	}{
 		{
-			name:          "returns no error for 200",
+			name:           "contains Authorization header when providing access token",
+			clientOpts:     []ClientOption{WithAccessToken("token")},
+			reqMethod:      http.MethodGet,
+			resStatusCode:  http.StatusOK,
+			wantStatusCode: http.StatusOK,
+			wantHeaders: map[string]string{
+				"Authorization": "Bearer: token",
+			},
+			wantErr: nil,
+		},
+		{
+			name:          "returns no error for GET 200",
 			reqMethod:     http.MethodGet,
 			resStatusCode: http.StatusOK,
 			resBody: &testResponse{
@@ -52,18 +63,27 @@ func TestClient(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name:           "contains Authorization header when providing access token",
-			clientOpts:     []ClientOption{WithAccessToken("token")},
-			reqMethod:      http.MethodGet,
-			resStatusCode:  http.StatusOK,
-			wantStatusCode: http.StatusOK,
-			wantHeaders: map[string]string{
-				"Authorization": "Bearer: token",
+			name:      "returns no error for POST 201",
+			reqMethod: http.MethodPost,
+			reqBody: &testResponse{
+				Items: []string{
+					"foo",
+					"bar",
+				},
 			},
-			wantErr: nil,
+			resStatusCode:  http.StatusCreated,
+			wantStatusCode: http.StatusCreated,
+			wantErr:        nil,
 		},
 		{
-			name:          "returns an error for 400",
+			name:           "returns no error for DELETE 204",
+			reqMethod:      http.MethodDelete,
+			resStatusCode:  http.StatusNoContent,
+			wantStatusCode: http.StatusNoContent,
+			wantErr:        nil,
+		},
+		{
+			name:          "returns an error for GET 400",
 			reqMethod:     http.MethodGet,
 			resStatusCode: http.StatusBadRequest,
 			resBody: &errorResponse{
@@ -71,11 +91,40 @@ func TestClient(t *testing.T) {
 				Message: "mandatory param: clientId",
 			},
 			wantStatusCode: http.StatusBadRequest,
-			actualBody:     &errorResponse{},
 			wantErr: &Error{
 				ErrorCode: 1,
 				HTTPCode:  http.StatusBadRequest,
 				Message:   "mandatory param: clientId",
+			},
+		},
+		{
+			name:          "returns an error for GET 404",
+			reqMethod:     http.MethodGet,
+			resStatusCode: http.StatusNotFound,
+			resBody: &errorResponse{
+				Code:    1,
+				Message: "not found",
+			},
+			wantStatusCode: http.StatusNotFound,
+			wantErr: &Error{
+				ErrorCode: 1,
+				HTTPCode:  http.StatusNotFound,
+				Message:   "not found",
+			},
+		},
+		{
+			name:          "returns an error for GET 500",
+			reqMethod:     http.MethodGet,
+			resStatusCode: http.StatusInternalServerError,
+			resBody: &errorResponse{
+				Code:    1,
+				Message: "internal error",
+			},
+			wantStatusCode: http.StatusInternalServerError,
+			wantErr: &Error{
+				ErrorCode: 1,
+				HTTPCode:  http.StatusInternalServerError,
+				Message:   "internal error",
 			},
 		},
 	}
