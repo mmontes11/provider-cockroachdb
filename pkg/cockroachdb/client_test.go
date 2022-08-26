@@ -168,6 +168,7 @@ func TestClient(t *testing.T) {
 			assert.NotNil(t, req)
 
 			res, err := client.do(context.Background(), req, tt.actualBody)
+
 			assert.NotNil(t, res)
 			assert.Equal(t, tt.wantErr, err)
 			assert.Equal(t, res.StatusCode, tt.wantStatusCode)

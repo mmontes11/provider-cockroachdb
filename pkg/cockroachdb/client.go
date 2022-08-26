@@ -87,7 +87,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	return &client, nil
 }
 
-func (c *Client) do(ctx context.Context, req *http.Request, val interface{}) (*http.Response, error) {
+func (c *Client) do(ctx context.Context, req *http.Request, val interface{}) (*Response, error) {
 	reqWithCtx := req.WithContext(ctx)
 	res, err := c.client.Do(reqWithCtx)
 	if err != nil {
@@ -95,53 +95,21 @@ func (c *Client) do(ctx context.Context, req *http.Request, val interface{}) (*h
 	}
 	defer res.Body.Close()
 
-	return res, c.handleResponse(ctx, res, val)
+	return c.handleResponse(ctx, res, val)
 }
 
-func (c *Client) get(ctx context.Context, path string, val interface{}) (*http.Response, error) {
-	req, err := c.newRequest(http.MethodGet, path, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating GET request: %v", err)
-	}
-	return c.do(ctx, req, val)
-}
-
-func (c *Client) post(ctx context.Context, path string, body, val interface{}) (*http.Response, error) {
-	req, err := c.newRequest(http.MethodPost, path, body)
-	if err != nil {
-		return nil, fmt.Errorf("error creating POST request: %v", err)
-	}
-	return c.do(ctx, req, val)
-}
-
-func (c *Client) patch(ctx context.Context, path string, body, val interface{}) (*http.Response, error) {
-	req, err := c.newRequest(http.MethodPatch, path, body)
-	if err != nil {
-		return nil, fmt.Errorf("error creating PATCH request: %v", err)
-	}
-	return c.do(ctx, req, val)
-}
-
-func (c *Client) delete(ctx context.Context, path string, body, val interface{}) (*http.Response, error) {
-	req, err := c.newRequest(http.MethodPatch, path, body)
-	if err != nil {
-		return nil, fmt.Errorf("error creating DELETE request: %v", err)
-	}
-	return c.do(ctx, req, val)
-}
-
-func (c *Client) handleResponse(ctx context.Context, res *http.Response, val interface{}) error {
+func (c *Client) handleResponse(ctx context.Context, res *http.Response, val interface{}) (*Response, error) {
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return fmt.Errorf("error reading response: %v", err)
+		return nil, fmt.Errorf("error reading response: %v", err)
 	}
 
 	if res.StatusCode >= 400 {
 		var errResponse errorResponse
 		if err := json.Unmarshal(bytes, &errResponse); err != nil {
-			return fmt.Errorf("error umarshalling response error: %v", err)
+			return nil, fmt.Errorf("error umarshalling response error: %v", err)
 		}
-		return &Error{
+		return nil, &Error{
 			ErrorCode: errResponse.Code,
 			HTTPCode:  res.StatusCode,
 			Message:   errResponse.Message,
@@ -149,12 +117,12 @@ func (c *Client) handleResponse(ctx context.Context, res *http.Response, val int
 	}
 
 	if val == nil {
-		return nil
+		return NewResponse(res), nil
 	}
 	if err := json.Unmarshal(bytes, &val); err != nil {
-		return fmt.Errorf("error umarshalling response error: %v", err)
+		return nil, fmt.Errorf("error umarshalling response error: %v", err)
 	}
-	return nil
+	return NewResponse(res), nil
 }
 
 func (c *Client) newRequest(method, path string, body interface{}) (*http.Request, error) {
@@ -188,6 +156,28 @@ func (c *Client) newRequest(method, path string, body interface{}) (*http.Reques
 	return req, nil
 }
 
+// Response represents the response that we send back to the user
+type Response struct {
+	StatusCode int
+}
+
+func NewResponse(res *http.Response) *Response {
+	return &Response{
+		StatusCode: res.StatusCode,
+	}
+}
+
+// Error represents the common errors returned by CockroacdhDB Cloud API
+type Error struct {
+	ErrorCode int
+	HTTPCode  int
+	Message   string
+}
+
+func (e *Error) Error() string {
+	return e.Message
+}
+
 type accessTokenTransport struct {
 	rt          http.RoundTripper
 	accessToken string
@@ -201,15 +191,4 @@ func (t *accessTokenTransport) RoundTrip(req *http.Request) (*http.Response, err
 type errorResponse struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
-}
-
-// Error represents the common errors returned by CockroacdhDB Cloud API
-type Error struct {
-	ErrorCode int
-	HTTPCode  int
-	Message   string
-}
-
-func (e *Error) Error() string {
-	return e.Message
 }
