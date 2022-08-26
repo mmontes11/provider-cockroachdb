@@ -25,18 +25,16 @@ func TestClient(t *testing.T) {
 		resStatusCode int
 		resBody       interface{}
 
-		wantStatusCode int
-		actualBody     interface{}
-		wantBody       interface{}
-		wantHeaders    map[string]string
-		wantErr        error
+		actualBody  interface{}
+		wantBody    interface{}
+		wantHeaders map[string]string
+		wantErr     error
 	}{
 		{
-			name:           "contains Authorization header when providing access token",
-			clientOpts:     []ClientOption{WithAccessToken("token")},
-			reqMethod:      http.MethodGet,
-			resStatusCode:  http.StatusOK,
-			wantStatusCode: http.StatusOK,
+			name:          "contains Authorization header when providing access token",
+			clientOpts:    []ClientOption{WithAccessToken("token")},
+			reqMethod:     http.MethodGet,
+			resStatusCode: http.StatusOK,
 			wantHeaders: map[string]string{
 				"Authorization": "Bearer: token",
 			},
@@ -52,8 +50,7 @@ func TestClient(t *testing.T) {
 					"bar",
 				},
 			},
-			wantStatusCode: http.StatusOK,
-			actualBody:     &testResponse{},
+			actualBody: &testResponse{},
 			wantBody: &testResponse{
 				Items: []string{
 					"foo",
@@ -71,16 +68,14 @@ func TestClient(t *testing.T) {
 					"bar",
 				},
 			},
-			resStatusCode:  http.StatusCreated,
-			wantStatusCode: http.StatusCreated,
-			wantErr:        nil,
+			resStatusCode: http.StatusCreated,
+			wantErr:       nil,
 		},
 		{
-			name:           "returns no error for DELETE 204",
-			reqMethod:      http.MethodDelete,
-			resStatusCode:  http.StatusNoContent,
-			wantStatusCode: http.StatusNoContent,
-			wantErr:        nil,
+			name:          "returns no error for DELETE 204",
+			reqMethod:     http.MethodDelete,
+			resStatusCode: http.StatusNoContent,
+			wantErr:       nil,
 		},
 		{
 			name:          "returns an error for GET 400",
@@ -90,7 +85,6 @@ func TestClient(t *testing.T) {
 				Code:    1,
 				Message: "mandatory param: clientId",
 			},
-			wantStatusCode: http.StatusBadRequest,
 			wantErr: &Error{
 				ErrorCode: 1,
 				HTTPCode:  http.StatusBadRequest,
@@ -105,7 +99,6 @@ func TestClient(t *testing.T) {
 				Code:    1,
 				Message: "not found",
 			},
-			wantStatusCode: http.StatusNotFound,
 			wantErr: &Error{
 				ErrorCode: 1,
 				HTTPCode:  http.StatusNotFound,
@@ -120,7 +113,6 @@ func TestClient(t *testing.T) {
 				Code:    1,
 				Message: "internal error",
 			},
-			wantStatusCode: http.StatusInternalServerError,
 			wantErr: &Error{
 				ErrorCode: 1,
 				HTTPCode:  http.StatusInternalServerError,
@@ -167,11 +159,8 @@ func TestClient(t *testing.T) {
 			}
 			assert.NotNil(t, req)
 
-			res, err := client.do(context.Background(), req, tt.actualBody)
-
-			assert.NotNil(t, res)
+			err = client.do(context.Background(), req, tt.actualBody)
 			assert.Equal(t, tt.wantErr, err)
-			assert.Equal(t, res.StatusCode, tt.wantStatusCode)
 			assert.Equal(t, tt.actualBody, tt.wantBody)
 		})
 	}

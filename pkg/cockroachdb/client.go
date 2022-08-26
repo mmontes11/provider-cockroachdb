@@ -15,10 +15,8 @@ const (
 	jsonMediaType = "application/json"
 )
 
-// ClientOption provides a variadic option for configuring the client
 type ClientOption func(c *Client) error
 
-// WithBaseURL allows to override default base URL
 func WithBaseURL(baseURL string) ClientOption {
 	return func(c *Client) error {
 		parsedURL, err := url.Parse(baseURL)
@@ -31,7 +29,6 @@ func WithBaseURL(baseURL string) ClientOption {
 	}
 }
 
-// WithHTTPClient allows to override default HTTP client
 func WithHTTPClient(client *http.Client) ClientOption {
 	return func(c *Client) error {
 		if client == nil {
@@ -43,7 +40,6 @@ func WithHTTPClient(client *http.Client) ClientOption {
 	}
 }
 
-// WithAccessToken allows to override default HTTP client
 func WithAccessToken(accessToken string) ClientOption {
 	return func(c *Client) error {
 		if accessToken == "" {
@@ -61,13 +57,13 @@ func WithAccessToken(accessToken string) ClientOption {
 	}
 }
 
-// Client performs requests on the Cocokroachdb Cloud API
 type Client struct {
 	client  *http.Client
 	baseURL *url.URL
+
+	Cluster *ClusterClient
 }
 
-// NewClient creates a new instance of the client
 func NewClient(opts ...ClientOption) (*Client, error) {
 	baseURL, err := url.Parse(defaultURL)
 	if err != nil {
@@ -84,32 +80,36 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		}
 	}
 
+	client.Cluster = &ClusterClient{
+		client: &client,
+	}
+
 	return &client, nil
 }
 
-func (c *Client) do(ctx context.Context, req *http.Request, val interface{}) (*Response, error) {
+func (c *Client) do(ctx context.Context, req *http.Request, val interface{}) error {
 	reqWithCtx := req.WithContext(ctx)
 	res, err := c.client.Do(reqWithCtx)
 	if err != nil {
-		return nil, fmt.Errorf("error making request: %v", err)
+		return fmt.Errorf("error making request: %v", err)
 	}
 	defer res.Body.Close()
 
 	return c.handleResponse(ctx, res, val)
 }
 
-func (c *Client) handleResponse(ctx context.Context, res *http.Response, val interface{}) (*Response, error) {
+func (c *Client) handleResponse(ctx context.Context, res *http.Response, val interface{}) error {
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response: %v", err)
+		return fmt.Errorf("error reading response: %v", err)
 	}
 
 	if res.StatusCode >= 400 {
 		var errResponse errorResponse
 		if err := json.Unmarshal(bytes, &errResponse); err != nil {
-			return nil, fmt.Errorf("error umarshalling response error: %v", err)
+			return fmt.Errorf("error umarshalling response error: %v", err)
 		}
-		return nil, &Error{
+		return &Error{
 			ErrorCode: errResponse.Code,
 			HTTPCode:  res.StatusCode,
 			Message:   errResponse.Message,
@@ -117,12 +117,12 @@ func (c *Client) handleResponse(ctx context.Context, res *http.Response, val int
 	}
 
 	if val == nil {
-		return NewResponse(res), nil
+		return nil
 	}
 	if err := json.Unmarshal(bytes, &val); err != nil {
-		return nil, fmt.Errorf("error umarshalling response error: %v", err)
+		return fmt.Errorf("error umarshalling response error: %v", err)
 	}
-	return NewResponse(res), nil
+	return nil
 }
 
 func (c *Client) newRequest(method, path string, body interface{}) (*http.Request, error) {
@@ -156,18 +156,6 @@ func (c *Client) newRequest(method, path string, body interface{}) (*http.Reques
 	return req, nil
 }
 
-// Response represents the response that we send back to the user
-type Response struct {
-	StatusCode int
-}
-
-func NewResponse(res *http.Response) *Response {
-	return &Response{
-		StatusCode: res.StatusCode,
-	}
-}
-
-// Error represents the common errors returned by CockroacdhDB Cloud API
 type Error struct {
 	ErrorCode int
 	HTTPCode  int
