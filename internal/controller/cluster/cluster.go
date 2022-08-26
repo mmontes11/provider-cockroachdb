@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	errNotCluster    = "managed resource is not a Cluster custom resource"
+	errNotCluster   = "managed resource is not a Cluster custom resource"
 	errTrackPCUsage = "cannot track ProviderConfig usage"
 	errGetPC        = "cannot get ProviderConfig"
 	errGetCreds     = "cannot get credentials"

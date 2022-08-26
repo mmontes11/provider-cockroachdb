@@ -24,11 +24,10 @@ linters:
     - typecheck
     - unused
     - varcheck
-    # not compatible with go 1.18 yet
-    # - bodyclose
-    # - noctx
-    # - structcheck
+    - bodyclose
+    - noctx
+    - structcheck
 
 run:
   timeout: 5m
-  go: "1.18"
+  go: "1.17"
