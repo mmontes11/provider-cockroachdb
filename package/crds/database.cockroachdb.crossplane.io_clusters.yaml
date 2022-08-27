@@ -64,10 +64,21 @@ spec:
               forProvider:
                 description: ClusterParameters are the configurable fields of a Cluster.
                 properties:
-                  configurableField:
+                  name:
                     type: string
+                  provider:
+                    type: string
+                  regions:
+                    items:
+                      type: string
+                    type: array
+                  spend_limit:
+                    type: integer
                 required:
-                - configurableField
+                - name
+                - provider
+                - regions
+                - spend_limit
                 type: object
               providerConfigRef:
                 default:
@@ -246,8 +257,19 @@ spec:
               atProvider:
                 description: ClusterObservation are the observable fields of a Cluster.
                 properties:
-                  observableField:
+                  cockroachdb_version:
                     type: string
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  plan:
+                    type: string
+                required:
+                - cockroachdb_version
+                - id
+                - name
+                - plan
                 type: object
               conditions:
                 description: Conditions of the resource.
