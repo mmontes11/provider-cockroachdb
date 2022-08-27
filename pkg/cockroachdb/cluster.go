@@ -10,7 +10,7 @@ import (
 type Cluster struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
-	Version   string    `json:"cockroachdb_version"`
+	Version   string    `json:"cockroach_version"`
 	Plan      string    `json:"plan"`
 	Provider  Provider  `json:"cloud_provider"`
 	State     State     `json:"state"`

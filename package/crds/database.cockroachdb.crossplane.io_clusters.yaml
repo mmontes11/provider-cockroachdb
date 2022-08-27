@@ -64,8 +64,6 @@ spec:
               forProvider:
                 description: ClusterParameters are the configurable fields of a Cluster.
                 properties:
-                  name:
-                    type: string
                   provider:
                     enum:
                     - CLOUD_PROVIDER_UNSPECIFIED
@@ -80,7 +78,6 @@ spec:
                     default: 0
                     type: integer
                 required:
-                - name
                 - provider
                 - regions
                 type: object
@@ -263,17 +260,11 @@ spec:
                 properties:
                   id:
                     type: string
-                  name:
-                    type: string
-                  plan:
-                    type: string
-                  version:
+                  state:
                     type: string
                 required:
                 - id
-                - name
-                - plan
-                - version
+                - state
                 type: object
               conditions:
                 description: Conditions of the resource.

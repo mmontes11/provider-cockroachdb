@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -30,6 +31,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -145,20 +147,27 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errNotCluster)
 	}
+	externalName := meta.GetExternalName(cr)
 
-	if cr.Status.AtProvider.ID == "" {
+	// 'Status' is not updated in the Create method, so at this point 'Status.AtProvider.ID' will be empty.
+	// As an alternative, check if we have a legit ID to perform the GET request.
+	if !IsValidUUID(externalName) {
 		return managed.ExternalObservation{
 			ResourceExists: false,
 		}, nil
 	}
 
-	cluster, err := c.service.client.Cluster.Get(ctx, cr.Status.AtProvider.ID)
-
-	if cockroachdbErr, ok := err.(*cockroachdb.Error); ok && cockroachdbErr.HTTPCode == http.StatusNotFound {
-		return managed.ExternalObservation{
-			ResourceExists: false,
-		}, nil
+	cluster, err := c.service.client.Cluster.Get(ctx, externalName)
+	if err != nil {
+		if cockroachdbErr, ok := err.(*cockroachdb.Error); ok && cockroachdbErr.HTTPCode == http.StatusNotFound {
+			return managed.ExternalObservation{
+				ResourceExists: false,
+			}, nil
+		}
+		return managed.ExternalObservation{}, err
 	}
+
+	fillAtProvider(cr, cluster)
 
 	switch cluster.State {
 	case cockroachdb.StateCreated:
@@ -182,7 +191,11 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errNotCluster)
 	}
 
-	fmt.Printf("Creating: %+v", cr)
+	cluster, err := c.service.client.Cluster.Create(ctx, createClusterFromCR(cr))
+	if err != nil {
+		return managed.ExternalCreation{}, err
+	}
+	meta.SetExternalName(cr, cluster.ID)
 
 	return managed.ExternalCreation{
 		ConnectionDetails: managed.ConnectionDetails{},
@@ -211,4 +224,28 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	fmt.Printf("Deleting: %+v", cr)
 
 	return nil
+}
+
+func IsValidUUID(u string) bool {
+	_, err := uuid.Parse(u)
+	return err == nil
+}
+
+func createClusterFromCR(cr *v1alpha1.Cluster) *cockroachdb.CreateCluster {
+	provider := cockroachdb.Provider(cr.Spec.ForProvider.Provider)
+	return &cockroachdb.CreateCluster{
+		Name:     cr.Name,
+		Provider: &provider,
+		Spec: &cockroachdb.ClusterSpec{
+			Serverless: cockroachdb.ServerlessSpec{
+				Regions:    cr.Spec.ForProvider.Regions,
+				SpendLimit: *cr.Spec.ForProvider.SpendLimit,
+			},
+		},
+	}
+}
+
+func fillAtProvider(cr *v1alpha1.Cluster, cluster *cockroachdb.Cluster) {
+	cr.Status.AtProvider.ID = cluster.ID
+	cr.Status.AtProvider.State = string(cluster.State)
 }

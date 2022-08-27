@@ -28,8 +28,6 @@ import (
 // ClusterParameters are the configurable fields of a Cluster.
 type ClusterParameters struct {
 	// +kubebuilder:validation:Required
-	Name string `json:"name"`
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=CLOUD_PROVIDER_UNSPECIFIED;GCP;AWS
 	Provider string `json:"provider"`
 	// +kubebuilder:validation:Required
@@ -41,10 +39,8 @@ type ClusterParameters struct {
 
 // ClusterObservation are the observable fields of a Cluster.
 type ClusterObservation struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Plan    string `json:"plan"`
+	ID    string `json:"id"`
+	State string `json:"state"`
 }
 
 // A ClusterSpec defines the desired state of a Cluster.

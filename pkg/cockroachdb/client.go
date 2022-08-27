@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -100,7 +100,7 @@ func (c *Client) do(ctx context.Context, req *http.Request, val interface{}) err
 }
 
 func (c *Client) handleResponse(ctx context.Context, res *http.Response, val interface{}) error {
-	bytes, err := ioutil.ReadAll(res.Body)
+	bytes, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("error reading response: %v", err)
 	}
