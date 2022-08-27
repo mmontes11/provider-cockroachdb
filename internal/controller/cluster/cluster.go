@@ -19,22 +19,25 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-
 	"github.com/crossplane/provider-cockroachdb/apis/database/v1alpha1"
 	apisv1alpha1 "github.com/crossplane/provider-cockroachdb/apis/v1alpha1"
 	"github.com/crossplane/provider-cockroachdb/internal/controller/features"
+	"github.com/crossplane/provider-cockroachdb/pkg/cockroachdb"
 )
 
 const (
@@ -46,11 +49,20 @@ const (
 	errNewClient = "cannot create new Service"
 )
 
-// A NoOpService does nothing.
-type NoOpService struct{}
+type CockroachdbService struct {
+	client *cockroachdb.Client
+}
 
 var (
-	newNoOpService = func(_ []byte) (interface{}, error) { return &NoOpService{}, nil }
+	newCockroachdbService = func(creds []byte) (*CockroachdbService, error) {
+		client, err := cockroachdb.NewClient(cockroachdb.WithAccessToken(string(creds)))
+		if err != nil {
+			return nil, fmt.Errorf("error creating CockroachDB client: %v", err)
+		}
+		return &CockroachdbService{
+			client: client,
+		}, nil
+	}
 )
 
 // Setup adds a controller that reconciles Cluster managed resources.
@@ -67,7 +79,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithExternalConnecter(&connector{
 			kube:         mgr.GetClient(),
 			usage:        resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1alpha1.ProviderConfigUsage{}),
-			newServiceFn: newNoOpService}),
+			newServiceFn: newCockroachdbService}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...))
@@ -84,7 +96,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube         client.Client
 	usage        resource.Tracker
-	newServiceFn func(creds []byte) (interface{}, error)
+	newServiceFn func(creds []byte) (*CockroachdbService, error)
 }
 
 // Connect typically produces an ExternalClient by:
@@ -126,7 +138,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 type external struct {
 	// A 'client' used to connect to the external resource API. In practice this
 	// would be something like an AWS SDK client.
-	service interface{}
+	service *CockroachdbService
 }
 
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
@@ -137,6 +149,23 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	// These fmt statements should be removed in the real implementation.
 	fmt.Printf("Observing: %+v", cr)
+
+	cluster, err := c.service.client.Cluster.Get(ctx, meta.GetExternalName(cr))
+
+	if cockroachdbErr, ok := err.(*cockroachdb.Error); ok && cockroachdbErr.HTTPCode == http.StatusNotFound {
+		return managed.ExternalObservation{
+			ResourceExists: false,
+		}, nil
+	}
+
+	switch cluster.State {
+	case cockroachdb.StateCreated:
+		cr.Status.SetConditions(xpv1.Available())
+	case cockroachdb.StateCreating:
+		cr.Status.SetConditions(xpv1.Creating())
+	default:
+		cr.Status.SetConditions(xpv1.Unavailable())
+	}
 
 	return managed.ExternalObservation{
 		// Return false when the external resource does not exist. This lets

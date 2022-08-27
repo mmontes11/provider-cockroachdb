@@ -27,12 +27,18 @@ import (
 
 // ClusterParameters are the configurable fields of a Cluster.
 type ClusterParameters struct {
-	ConfigurableField string `json:"configurableField"`
+	Name       string   `json:"name"`
+	Provider   string   `json:"provider"`
+	Regions    []string `json:"regions"`
+	SpendLimit int      `json:"spend_limit"`
 }
 
 // ClusterObservation are the observable fields of a Cluster.
 type ClusterObservation struct {
-	ObservableField string `json:"observableField,omitempty"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Version string `json:"cockroachdb_version"`
+	Plan    string `json:"plan"`
 }
 
 // A ClusterSpec defines the desired state of a Cluster.
