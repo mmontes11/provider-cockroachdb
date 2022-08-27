@@ -1,0 +1,13 @@
+apiVersion: database.cockroachdb.crossplane.io/v1alpha1
+kind: Cluster
+metadata:
+  name: cluster
+spec:
+  forProvider:
+    name: cluster
+    provider: AWS
+    regions:
+      - us-central1
+    spendLimit: 0
+  providerConfigRef:
+    name: default

@@ -30,7 +30,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -147,10 +146,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotCluster)
 	}
 
-	// These fmt statements should be removed in the real implementation.
-	fmt.Printf("Observing: %+v", cr)
+	if cr.Status.AtProvider.ID == "" {
+		return managed.ExternalObservation{
+			ResourceExists: false,
+		}, nil
+	}
 
-	cluster, err := c.service.client.Cluster.Get(ctx, meta.GetExternalName(cr))
+	cluster, err := c.service.client.Cluster.Get(ctx, cr.Status.AtProvider.ID)
 
 	if cockroachdbErr, ok := err.(*cockroachdb.Error); ok && cockroachdbErr.HTTPCode == http.StatusNotFound {
 		return managed.ExternalObservation{
@@ -168,18 +170,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	return managed.ExternalObservation{
-		// Return false when the external resource does not exist. This lets
-		// the managed resource reconciler know that it needs to call Create to
-		// (re)create the resource, or that it has successfully been deleted.
-		ResourceExists: true,
-
-		// Return false when the external resource exists, but it not up to date
-		// with the desired managed resource state. This lets the managed
-		// resource reconciler know that it needs to call Update.
-		ResourceUpToDate: true,
-
-		// Return any details that may be required to connect to the external
-		// resource. These will be stored as the connection secret.
+		ResourceExists:    true,
+		ResourceUpToDate:  true,
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
@@ -193,8 +185,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	fmt.Printf("Creating: %+v", cr)
 
 	return managed.ExternalCreation{
-		// Optionally return any details that may be required to connect to the
-		// external resource. These will be stored as the connection secret.
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
@@ -208,8 +198,6 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	fmt.Printf("Updating: %+v", cr)
 
 	return managed.ExternalUpdate{
-		// Optionally return any details that may be required to connect to the
-		// external resource. These will be stored as the connection secret.
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }

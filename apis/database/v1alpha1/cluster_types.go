@@ -27,17 +27,23 @@ import (
 
 // ClusterParameters are the configurable fields of a Cluster.
 type ClusterParameters struct {
-	Name       string   `json:"name"`
-	Provider   string   `json:"provider"`
-	Regions    []string `json:"regions"`
-	SpendLimit int      `json:"spend_limit"`
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=CLOUD_PROVIDER_UNSPECIFIED;GCP;AWS
+	Provider string `json:"provider"`
+	// +kubebuilder:validation:Required
+	Regions []string `json:"regions"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=0
+	SpendLimit *int `json:"spendLimit,omitempty"`
 }
 
 // ClusterObservation are the observable fields of a Cluster.
 type ClusterObservation struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
-	Version string `json:"cockroachdb_version"`
+	Version string `json:"version"`
 	Plan    string `json:"plan"`
 }
 

@@ -67,18 +67,22 @@ spec:
                   name:
                     type: string
                   provider:
+                    enum:
+                    - CLOUD_PROVIDER_UNSPECIFIED
+                    - GCP
+                    - AWS
                     type: string
                   regions:
                     items:
                       type: string
                     type: array
-                  spend_limit:
+                  spendLimit:
+                    default: 0
                     type: integer
                 required:
                 - name
                 - provider
                 - regions
-                - spend_limit
                 type: object
               providerConfigRef:
                 default:
@@ -257,19 +261,19 @@ spec:
               atProvider:
                 description: ClusterObservation are the observable fields of a Cluster.
                 properties:
-                  cockroachdb_version:
-                    type: string
                   id:
                     type: string
                   name:
                     type: string
                   plan:
                     type: string
+                  version:
+                    type: string
                 required:
-                - cockroachdb_version
                 - id
                 - name
                 - plan
+                - version
                 type: object
               conditions:
                 description: Conditions of the resource.

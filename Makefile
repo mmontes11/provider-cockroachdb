@@ -142,6 +142,13 @@ help-special: crossplane.help
 # ====================================================================================
 # Custom Targets
 
+PROVIDER_SECRET_NAME ?= cockroachdb-provider-secret
+PROVIDER_SECRET_NAMESPACE ?= default
+.PHONY: provider-secret
+provider.secret:
+	@[ "${token}" ] || ( echo "argument \"token\" is not set"; exit 1 )
+	@$(KUBECTL) create secret generic $(PROVIDER_SECRET_NAME) -n $(PROVIDER_SECRET_NAMESPACE) --from-literal=credentials=$(token) 
+
 .PHONY: xlint
 xlint: golangci-lint
 	$(GOLANGCI_LINT) run

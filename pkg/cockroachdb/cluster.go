@@ -56,7 +56,7 @@ type CreateCluster struct {
 }
 
 func (c *ClusterClient) Get(ctx context.Context, ID string) (*Cluster, error) {
-	req, err := c.client.newRequest(http.MethodGet, fmt.Sprintf("/clusteers/%s", ID), nil)
+	req, err := c.client.newRequest(http.MethodGet, fmt.Sprintf("/clusters/%s", ID), nil)
 	if err != nil {
 		return nil, err
 	}

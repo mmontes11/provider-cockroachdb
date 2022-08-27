@@ -8,10 +8,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 const (
-	defaultURL    = "https://cockroachlabs.cloud/api"
+	defaultURL    = "https://cockroachlabs.cloud/api/v1"
 	jsonMediaType = "application/json"
 )
 
@@ -126,13 +127,14 @@ func (c *Client) handleResponse(ctx context.Context, res *http.Response, val int
 }
 
 func (c *Client) newRequest(method, path string, body interface{}) (*http.Request, error) {
-	url, err := c.baseURL.Parse(path)
+	url, err := appendPath(*c.baseURL, path)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing URL: %v", err)
 	}
 
 	if method == http.MethodGet {
-		req, err := http.NewRequest(method, url.String(), nil)
+		urlString := url.String()
+		req, err := http.NewRequest(method, urlString, nil)
 		if err != nil {
 			return nil, fmt.Errorf("error creating request: %v", err)
 		}
@@ -156,6 +158,18 @@ func (c *Client) newRequest(method, path string, body interface{}) (*http.Reques
 	return req, nil
 }
 
+func appendPath(url url.URL, path string) (*url.URL, error) {
+	if !strings.HasPrefix(path, "/") {
+		url.Path += "/"
+	}
+	url.Path += path
+	urlWithPath, err := url.Parse(url.String())
+	if err != nil {
+		return nil, fmt.Errorf("error appending path to URL: %v", err)
+	}
+	return urlWithPath, nil
+}
+
 type Error struct {
 	ErrorCode int
 	HTTPCode  int
@@ -172,7 +186,7 @@ type accessTokenTransport struct {
 }
 
 func (t *accessTokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Add("Authorization", "Bearer: "+t.accessToken)
+	req.Header.Add("Authorization", "Bearer "+t.accessToken)
 	return t.rt.RoundTrip(req)
 }
 
