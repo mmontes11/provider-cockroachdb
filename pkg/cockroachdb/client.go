@@ -131,13 +131,17 @@ func (c *Client) newRequest(method, path string, body interface{}) (*http.Reques
 	if err != nil {
 		return nil, fmt.Errorf("error parsing URL: %v", err)
 	}
+	setHeaders := func(req *http.Request) {
+		req.Header.Set("Content-Type", jsonMediaType)
+		req.Header.Set("Accept", jsonMediaType)
+	}
 
 	if method == http.MethodGet {
-		urlString := url.String()
-		req, err := http.NewRequest(method, urlString, nil)
+		req, err := http.NewRequest(method, url.String(), nil)
 		if err != nil {
 			return nil, fmt.Errorf("error creating request: %v", err)
 		}
+		setHeaders(req)
 		return req, nil
 	}
 
@@ -152,9 +156,7 @@ func (c *Client) newRequest(method, path string, body interface{}) (*http.Reques
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
-	req.Header.Set("Content-Type", jsonMediaType)
-	req.Header.Set("Accept", jsonMediaType)
-
+	setHeaders(req)
 	return req, nil
 }
 
