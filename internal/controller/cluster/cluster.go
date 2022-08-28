@@ -27,6 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	cockroachdb "github.com/cockroachdb/cockroach-cloud-sdk-go/pkg/client"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -38,7 +39,6 @@ import (
 	"github.com/crossplane/provider-cockroachdb/apis/database/v1alpha1"
 	apisv1alpha1 "github.com/crossplane/provider-cockroachdb/apis/v1alpha1"
 	"github.com/crossplane/provider-cockroachdb/internal/controller/features"
-	"github.com/crossplane/provider-cockroachdb/pkg/cockroachdb"
 )
 
 const (
@@ -51,17 +51,17 @@ const (
 )
 
 type CockroachdbService struct {
-	client *cockroachdb.Client
+	cockroachdb.Service
 }
 
 var (
 	newCockroachdbService = func(creds []byte) (*CockroachdbService, error) {
-		client, err := cockroachdb.NewClient(cockroachdb.WithAccessToken(string(creds)))
-		if err != nil {
-			return nil, fmt.Errorf("error creating CockroachDB client: %v", err)
-		}
+		clientConfig := cockroachdb.NewConfiguration(string(creds))
+		cockroachclient := cockroachdb.NewClient(clientConfig)
+		service := cockroachdb.NewService(cockroachclient)
+
 		return &CockroachdbService{
-			client: client,
+			service,
 		}, nil
 	}
 )
@@ -157,9 +157,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}, nil
 	}
 
-	cluster, err := c.service.client.Cluster.Get(ctx, externalName)
+	cluster, res, err := c.service.GetCluster(ctx, externalName)
 	if err != nil {
-		if cockroachdbErr, ok := err.(*cockroachdb.Error); ok && cockroachdbErr.HTTPCode == http.StatusNotFound {
+		if res.StatusCode == http.StatusNotFound {
 			return managed.ExternalObservation{
 				ResourceExists: false,
 			}, nil
@@ -170,10 +170,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	fillAtProvider(cr, cluster)
 
 	switch cluster.State {
-	case cockroachdb.StateCreated:
+	case cockroachdb.CLUSTERSTATETYPE_CREATED:
 		cr.Status.SetConditions(xpv1.Available())
-	case cockroachdb.StateCreating:
+	case cockroachdb.CLUSTERSTATETYPE_CREATING:
 		cr.Status.SetConditions(xpv1.Creating())
+	case cockroachdb.CLUSTERSTATETYPE_DELETED:
+		return managed.ExternalObservation{
+			ResourceExists: false,
+		}, nil
 	default:
 		cr.Status.SetConditions(xpv1.Unavailable())
 	}
@@ -191,11 +195,11 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errNotCluster)
 	}
 
-	cluster, err := c.service.client.Cluster.Create(ctx, createClusterFromCR(cr))
+	cluster, _, err := c.service.CreateCluster(ctx, cr.CreateClusterRequest())
 	if err != nil {
 		return managed.ExternalCreation{}, err
 	}
-	meta.SetExternalName(cr, cluster.ID)
+	meta.SetExternalName(cr, cluster.Id)
 
 	return managed.ExternalCreation{
 		ConnectionDetails: managed.ConnectionDetails{},
@@ -220,10 +224,10 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	if !ok {
 		return errors.New(errNotCluster)
 	}
+	externalName := meta.GetExternalName(cr)
 
-	fmt.Printf("Deleting: %+v", cr)
-
-	return nil
+	_, _, err := c.service.DeleteCluster(ctx, externalName)
+	return err
 }
 
 func IsValidUUID(u string) bool {
@@ -231,21 +235,7 @@ func IsValidUUID(u string) bool {
 	return err == nil
 }
 
-func createClusterFromCR(cr *v1alpha1.Cluster) *cockroachdb.CreateCluster {
-	provider := cockroachdb.Provider(cr.Spec.ForProvider.Provider)
-	return &cockroachdb.CreateCluster{
-		Name:     cr.Name,
-		Provider: &provider,
-		Spec: &cockroachdb.ClusterSpec{
-			Serverless: cockroachdb.ServerlessSpec{
-				Regions:    cr.Spec.ForProvider.Regions,
-				SpendLimit: *cr.Spec.ForProvider.SpendLimit,
-			},
-		},
-	}
-}
-
 func fillAtProvider(cr *v1alpha1.Cluster, cluster *cockroachdb.Cluster) {
-	cr.Status.AtProvider.ID = cluster.ID
+	cr.Status.AtProvider.ID = cluster.Id
 	cr.Status.AtProvider.State = string(cluster.State)
 }

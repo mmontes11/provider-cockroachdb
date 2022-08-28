@@ -5,8 +5,9 @@ metadata:
 spec:
   forProvider:
     provider: AWS
-    regions:
-      - eu-west-1
-    spendLimit: 0
+    serverless:
+      regions:
+        - eu-west-1
+      spendLimit: 0
   providerConfigRef:
     name: default

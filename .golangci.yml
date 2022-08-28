@@ -24,7 +24,6 @@ linters:
     - typecheck
     - unused
     - varcheck
-    - bodyclose
     - structcheck
 
 run:

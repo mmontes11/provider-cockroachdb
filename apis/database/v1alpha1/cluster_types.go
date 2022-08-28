@@ -19,22 +19,27 @@ package v1alpha1
 import (
 	"reflect"
 
+	cockroachdb "github.com/cockroachdb/cockroach-cloud-sdk-go/pkg/client"
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
+
+type ServerlessCluster struct {
+	// +kubebuilder:validation:Required
+	Regions []string `json:"regions"`
+	// +optional
+	// +kubebuilder:default=0
+	SpendLimit *int32 `json:"spendLimit"`
+}
 
 // ClusterParameters are the configurable fields of a Cluster.
 type ClusterParameters struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=CLOUD_PROVIDER_UNSPECIFIED;GCP;AWS
-	Provider string `json:"provider"`
+	Provider cockroachdb.ApiCloudProvider `json:"provider"`
 	// +kubebuilder:validation:Required
-	Regions []string `json:"regions"`
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default=0
-	SpendLimit *int `json:"spendLimit,omitempty"`
+	Serverless *ServerlessCluster `json:"serverless"`
 }
 
 // ClusterObservation are the observable fields of a Cluster.
@@ -70,6 +75,19 @@ type Cluster struct {
 
 	Spec   ClusterSpec   `json:"spec"`
 	Status ClusterStatus `json:"status,omitempty"`
+}
+
+func (c *Cluster) CreateClusterRequest() *cockroachdb.CreateClusterRequest {
+	return &cockroachdb.CreateClusterRequest{
+		Name:     c.Name,
+		Provider: c.Spec.ForProvider.Provider,
+		Spec: cockroachdb.CreateClusterSpecification{
+			Serverless: &cockroachdb.ServerlessClusterCreateSpecification{
+				Regions:    c.Spec.ForProvider.Serverless.Regions,
+				SpendLimit: *c.Spec.ForProvider.Serverless.SpendLimit,
+			},
+		},
+	}
 }
 
 // +kubebuilder:object:root=true

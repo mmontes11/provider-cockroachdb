@@ -65,21 +65,29 @@ spec:
                 description: ClusterParameters are the configurable fields of a Cluster.
                 properties:
                   provider:
+                    description: 'ApiCloudProvider  - GCP: The Google Cloud Platform
+                      cloud provider.  - AWS: The Amazon Web Services cloud provider.'
                     enum:
                     - CLOUD_PROVIDER_UNSPECIFIED
                     - GCP
                     - AWS
                     type: string
-                  regions:
-                    items:
-                      type: string
-                    type: array
-                  spendLimit:
-                    default: 0
-                    type: integer
+                  serverless:
+                    properties:
+                      regions:
+                        items:
+                          type: string
+                        type: array
+                      spendLimit:
+                        default: 0
+                        format: int32
+                        type: integer
+                    required:
+                    - regions
+                    type: object
                 required:
                 - provider
-                - regions
+                - serverless
                 type: object
               providerConfigRef:
                 default:
