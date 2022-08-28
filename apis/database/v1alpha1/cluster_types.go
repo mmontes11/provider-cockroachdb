@@ -90,6 +90,14 @@ func (c *Cluster) CreateClusterRequest() *cockroachdb.CreateClusterRequest {
 	}
 }
 
+func (c *Cluster) UpdateClusterSpec() *cockroachdb.UpdateClusterSpecification {
+	return &cockroachdb.UpdateClusterSpecification{
+		Serverless: &cockroachdb.ServerlessClusterUpdateSpecification{
+			SpendLimit: *c.Spec.ForProvider.Serverless.SpendLimit,
+		},
+	}
+}
+
 // +kubebuilder:object:root=true
 
 // ClusterList contains a list of Cluster

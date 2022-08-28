@@ -18,7 +18,6 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -151,7 +150,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	// 'Status' is not updated in the Create method, so at this point 'Status.AtProvider.ID' will be empty.
 	// As an alternative, check if we have a legit ID to perform the GET request.
-	if !IsValidUUID(externalName) {
+	if !isValidUUID(externalName) {
 		return managed.ExternalObservation{
 			ResourceExists: false,
 		}, nil
@@ -184,7 +183,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	return managed.ExternalObservation{
 		ResourceExists:    true,
-		ResourceUpToDate:  true,
+		ResourceUpToDate:  isUpToDate(cr, cluster),
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
@@ -211,8 +210,12 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errNotCluster)
 	}
+	externalName := meta.GetExternalName(cr)
 
-	fmt.Printf("Updating: %+v", cr)
+	_, _, err := c.service.UpdateCluster(ctx, externalName, cr.UpdateClusterSpec(), &cockroachdb.UpdateClusterOptions{})
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
 
 	return managed.ExternalUpdate{
 		ConnectionDetails: managed.ConnectionDetails{},
@@ -230,7 +233,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	return err
 }
 
-func IsValidUUID(u string) bool {
+func isValidUUID(u string) bool {
 	_, err := uuid.Parse(u)
 	return err == nil
 }
@@ -238,4 +241,8 @@ func IsValidUUID(u string) bool {
 func fillAtProvider(cr *v1alpha1.Cluster, cluster *cockroachdb.Cluster) {
 	cr.Status.AtProvider.ID = cluster.Id
 	cr.Status.AtProvider.State = string(cluster.State)
+}
+
+func isUpToDate(cr *v1alpha1.Cluster, cluster *cockroachdb.Cluster) bool {
+	return *cr.Spec.ForProvider.Serverless.SpendLimit == cluster.Config.Serverless.SpendLimit
 }
