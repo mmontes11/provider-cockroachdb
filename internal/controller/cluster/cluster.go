@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -38,6 +39,7 @@ import (
 	"github.com/crossplane/provider-cockroachdb/apis/database/v1alpha1"
 	apisv1alpha1 "github.com/crossplane/provider-cockroachdb/apis/v1alpha1"
 	"github.com/crossplane/provider-cockroachdb/internal/controller/features"
+	"github.com/crossplane/provider-cockroachdb/pkg/cockroachca"
 )
 
 const (
@@ -47,10 +49,13 @@ const (
 	errGetCreds     = "cannot get credentials"
 
 	errNewClient = "cannot create new Service"
+
+	defaultCAURL = "https://cockroachlabs.cloud/"
 )
 
 type CockroachdbService struct {
-	cockroachdb.Service
+	crdbClient cockroachdb.Service
+	caClient   *cockroachca.CAClient
 }
 
 var (
@@ -59,8 +64,17 @@ var (
 		cockroachclient := cockroachdb.NewClient(clientConfig)
 		service := cockroachdb.NewService(cockroachclient)
 
+		caClient, err := cockroachca.NewCAClient(
+			cockroachca.WithBaseURL(defaultCAURL),
+			cockroachca.WithHTTPClient(http.DefaultClient),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error creatint CA client: %v", err)
+		}
+
 		return &CockroachdbService{
-			service,
+			crdbClient: service,
+			caClient:   caClient,
 		}, nil
 	}
 )
@@ -156,7 +170,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}, nil
 	}
 
-	cluster, res, err := c.service.GetCluster(ctx, externalName)
+	cluster, res, err := c.service.crdbClient.GetCluster(ctx, externalName)
 	if err != nil {
 		if res.StatusCode == http.StatusNotFound {
 			return managed.ExternalObservation{
@@ -194,14 +208,21 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errNotCluster)
 	}
 
-	cluster, _, err := c.service.CreateCluster(ctx, cr.CreateClusterRequest())
+	cluster, _, err := c.service.crdbClient.CreateCluster(ctx, cr.CreateClusterRequest())
 	if err != nil {
 		return managed.ExternalCreation{}, err
 	}
 	meta.SetExternalName(cr, cluster.Id)
 
+	ca, err := c.service.caClient.ClusterCACert(ctx, cluster)
+	if err != nil {
+		return managed.ExternalCreation{}, err
+	}
+
 	return managed.ExternalCreation{
-		ConnectionDetails: managed.ConnectionDetails{},
+		ConnectionDetails: managed.ConnectionDetails{
+			"ca.crt": ca,
+		},
 	}, nil
 }
 
@@ -212,7 +233,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 	externalName := meta.GetExternalName(cr)
 
-	_, _, err := c.service.UpdateCluster(ctx, externalName, cr.UpdateClusterSpec(), &cockroachdb.UpdateClusterOptions{})
+	_, _, err := c.service.crdbClient.UpdateCluster(ctx, externalName, cr.UpdateClusterSpec(), &cockroachdb.UpdateClusterOptions{})
 	if err != nil {
 		return managed.ExternalUpdate{}, err
 	}
@@ -229,7 +250,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	}
 	externalName := meta.GetExternalName(cr)
 
-	_, _, err := c.service.DeleteCluster(ctx, externalName)
+	_, _, err := c.service.crdbClient.DeleteCluster(ctx, externalName)
 	return err
 }
 

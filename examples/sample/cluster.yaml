@@ -9,5 +9,8 @@ spec:
       regions:
         - eu-west-1
       spendLimit: 0
+  writeConnectionSecretToRef:
+    name: cluster
+    namespace: default
   providerConfigRef:
     name: default
