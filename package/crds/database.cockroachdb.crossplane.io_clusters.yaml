@@ -64,6 +64,31 @@ spec:
               forProvider:
                 description: ClusterParameters are the configurable fields of a Cluster.
                 properties:
+                  credentials:
+                    properties:
+                      passwordSecretRef:
+                        description: A SecretKeySelector is a reference to a secret
+                          key in an arbitrary namespace.
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        - namespace
+                        type: object
+                      username:
+                        type: string
+                    required:
+                    - username
+                    type: object
                   provider:
                     description: 'ApiCloudProvider  - GCP: The Google Cloud Platform
                       cloud provider.  - AWS: The Amazon Web Services cloud provider.'
@@ -86,6 +111,7 @@ spec:
                     - regions
                     type: object
                 required:
+                - credentials
                 - provider
                 - serverless
                 type: object

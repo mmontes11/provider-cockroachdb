@@ -25,7 +25,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+type Credentials struct {
+	// +immutable
+	// +kubebuilder:validation:Required
+	Username string `json:"username"`
+	// +immutable
+	// +optional
+	PasswordSecretRef *xpv1.SecretKeySelector `json:"passwordSecretRef,omitempty"`
+}
+
 type ServerlessCluster struct {
+	// +immutable
 	// +kubebuilder:validation:Required
 	Regions []string `json:"regions"`
 	// +optional
@@ -40,6 +50,8 @@ type ClusterParameters struct {
 	Provider cockroachdb.ApiCloudProvider `json:"provider"`
 	// +kubebuilder:validation:Required
 	Serverless *ServerlessCluster `json:"serverless"`
+	// +kubebuilder:validation:Required
+	Credentials *Credentials `json:"credentials"`
 }
 
 // ClusterObservation are the observable fields of a Cluster.
