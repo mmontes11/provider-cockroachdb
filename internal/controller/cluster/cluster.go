@@ -21,12 +21,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	cockroachdb "github.com/cockroachdb/cockroach-cloud-sdk-go/pkg/client"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -40,6 +34,13 @@ import (
 	apisv1alpha1 "github.com/crossplane/provider-cockroachdb/apis/v1alpha1"
 	"github.com/crossplane/provider-cockroachdb/internal/controller/features"
 	"github.com/crossplane/provider-cockroachdb/pkg/cockroachca"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"github.com/sethvargo/go-password/password"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -114,10 +115,6 @@ type connector struct {
 }
 
 // Connect typically produces an ExternalClient by:
-// 1. Tracking that the managed resource is using a ProviderConfig.
-// 2. Getting the managed resource's ProviderConfig.
-// 3. Getting the credentials specified by the ProviderConfig.
-// 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
 	cr, ok := mg.(*v1alpha1.Cluster)
 	if !ok {
@@ -144,15 +141,17 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
-	return &external{service: svc}, nil
+	return &external{
+		service: svc,
+		kube:    c.kube,
+	}, nil
 }
 
 // An ExternalClient observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	// A 'client' used to connect to the external resource API. In practice this
-	// would be something like an AWS SDK client.
 	service *CockroachdbService
+	kube    client.Client
 }
 
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
@@ -214,15 +213,23 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 	meta.SetExternalName(cr, cluster.Id)
 
+	pwd, err := getPassword(ctx, c.kube, cr.Spec.ForProvider.Credentials.PasswordSecretRef)
+	if err != nil {
+		return managed.ExternalCreation{}, err
+	}
+
+	_, _, err = c.service.crdbClient.CreateSQLUser(ctx, cluster.Id, cr.CreateSQLUserRequest(string(pwd)))
+	if err != nil {
+		return managed.ExternalCreation{}, err
+	}
+
 	ca, err := c.service.caClient.ClusterCACert(ctx, cluster)
 	if err != nil {
 		return managed.ExternalCreation{}, err
 	}
 
 	return managed.ExternalCreation{
-		ConnectionDetails: managed.ConnectionDetails{
-			"ca.crt": ca,
-		},
+		ConnectionDetails: getConnectionDetails(cr, cluster, ca, pwd),
 	}, nil
 }
 
@@ -266,4 +273,50 @@ func fillAtProvider(cr *v1alpha1.Cluster, cluster *cockroachdb.Cluster) {
 
 func isUpToDate(cr *v1alpha1.Cluster, cluster *cockroachdb.Cluster) bool {
 	return *cr.Spec.ForProvider.Serverless.SpendLimit == cluster.Config.Serverless.SpendLimit
+}
+
+func getPassword(ctx context.Context, kube client.Client, secretKeySelector *xpv1.SecretKeySelector) ([]byte, error) {
+	if secretKeySelector == nil {
+		password, err := password.Generate(16, 4, 0, false, false)
+		if err != nil {
+			return nil, fmt.Errorf("error generating random password: %v", err)
+		}
+		return []byte(password), nil
+	}
+
+	nn := types.NamespacedName{
+		Name:      secretKeySelector.Name,
+		Namespace: secretKeySelector.Namespace,
+	}
+
+	var secret corev1.Secret
+	if err := kube.Get(ctx, nn, &secret); err != nil {
+		return nil, err
+	}
+
+	val, ok := secret.Data[secretKeySelector.Key]
+	if !ok {
+		return nil, fmt.Errorf("secret key \"%s\" not found", secretKeySelector.Key)
+	}
+
+	return val, nil
+}
+
+func getConnectionDetails(cr *v1alpha1.Cluster, cluster *cockroachdb.Cluster, ca, password []byte) managed.ConnectionDetails {
+	// TODO: Adapt this when supporting dedicated clusters, as they can run in multiple regions
+	host := cluster.Regions[0].SqlDns
+	user := cr.Spec.ForProvider.Credentials.Username
+	dsn := fmt.Sprintf(
+		"postgresql://%s:%s@%s:26257/defaultdb?sslmode=verify-full&options=--cluster%s%s",
+		user,
+		password,
+		host,
+		"%3D",
+		cluster.Name,
+	)
+
+	return managed.ConnectionDetails{
+		"ca.crt": ca,
+		"dsn":    []byte(dsn),
+	}
 }

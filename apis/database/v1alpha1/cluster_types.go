@@ -110,6 +110,13 @@ func (c *Cluster) UpdateClusterSpec() *cockroachdb.UpdateClusterSpecification {
 	}
 }
 
+func (c *Cluster) CreateSQLUserRequest(pwd string) *cockroachdb.CreateSQLUserRequest {
+	return &cockroachdb.CreateSQLUserRequest{
+		Name:     c.Spec.ForProvider.Credentials.Username,
+		Password: pwd,
+	}
+}
+
 // +kubebuilder:object:root=true
 
 // ClusterList contains a list of Cluster

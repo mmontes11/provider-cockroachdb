@@ -9,8 +9,15 @@ spec:
       regions:
         - eu-west-1
       spendLimit: 0
+    credentials:
+      username: cluster
+      # A random password will be generated if not provided
+      # passwordSecretRef:
+      #   name: cluster-password
+      #   namespace: default
+      #   key: password
   writeConnectionSecretToRef:
-    name: cluster
+    name: cluster-conn
     namespace: default
   providerConfigRef:
     name: default
