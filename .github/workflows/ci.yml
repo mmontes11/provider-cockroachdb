@@ -290,12 +290,12 @@ jobs:
           # builds by default. Specifying --load does so.
           BUILD_ARGS: "--load"
 
-      - name: Publish Artifacts to GitHub
-        uses: actions/upload-artifact@v2
-        with:
-          name: output
-          path: _output/**
-          retention-days: 3
+      # - name: Publish Artifacts to GitHub
+      #   uses: actions/upload-artifact@v2
+      #   with:
+      #     name: output
+      #     path: _output/**
+      #     retention-days: 3
 
       - name: Login to Docker
         uses: docker/login-action@v1
